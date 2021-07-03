@@ -1,16 +1,34 @@
-let app = new Vue({
+const FixOffeset = 17;
+const TOKEN = 'ÄcbdÊniÆÇÉÇÈÈjkgelÈ';
+function unCompileParam(code = '') {
+  let c = String.fromCharCode(code.charCodeAt(0) - FixOffeset - code.length);
+  for (let i = 1; i < code.length; i += 1) {
+    c += String.fromCharCode(code.charCodeAt(i) - c.charCodeAt(i - 1));
+  }
+  return c;
+}
+
+const token = unCompileParam(TOKEN);
+const defaultPargh = { title: '示例文章', value: '', key: 'closertb' };
+
+function getDefault () {
+  return fetch('/editor/assets/default-content.md')
+  .then(res => res.text());
+}
+
+const app = new Vue({
   el: '#app',
   data: function () {
     let d = {
       aboutOutput: '',
       output: '',
       source: '',
+      loading: false,
       editorThemes: [
         { label: 'base16-light', value: 'base16-light' },
-        { label: 'duotone-light', value: 'duotone-light' },
-        { label: 'monokai', value: 'monokai' }
       ],
       editor: null,
+      selectedItem: {},
       builtinFonts: [
         {
           label: '无衬线',
@@ -29,13 +47,10 @@ let app = new Vue({
       ],
       themeOption: [
         { label: 'default', value: 'default', author: '张凯强' },
-        { label: 'lyric', value: 'lyric', author: 'Lyric' },
-        { label: 'lupeng', value: 'lupeng', author: '鲁鹏' }
       ],
+      graphList: [defaultPargh],
       styleThemes: {
         default: defaultTheme,
-        lyric: lyricTheme,
-        lupeng: lupengTheme
       },
       aboutDialogVisible: false
     };
@@ -43,10 +58,11 @@ let app = new Vue({
     d.currentFont = d.builtinFonts[0].value;
     d.currentSize = d.sizeOption[1].value;
     d.currentTheme = d.themeOption[0].value;
+    d.currentGraph = d.graphList[0].value;
     return d;
   },
   mounted() {
-    let self = this;
+    const self = this;
     this.editor = CodeMirror.fromTextArea(
       document.getElementById('editor'),
       {
@@ -64,19 +80,40 @@ let app = new Vue({
     this.wxRenderer = new WxRenderer({
       theme: this.styleThemes.default,
       fonts: this.currentFont,
-      size: this.currentSize
+      size: this.currentSize,
+      graph: this.currentGraph
     });
     // 如果有编辑内容被保存则读取，否则加载默认文档
     if (localStorage.getItem("__editor_content")) {
       this.editor.setValue(localStorage.getItem("__editor_content"));
     } else {
-      axios({
-        method: 'get',
-        url: './assets/default-content.md',
-      }).then(function (resp) {
+     /*  axios({
+        url: './editor/assets/default-content.md',
+        method: 'get'
+      }).then(resp => {
         self.editor.setValue(resp.data)
-      })
+      }); */
+      getDefault()
+      .then(data => {
+        self.editor.setValue(data)
+      });
     }
+    fetch('https://closertb.site/arcticle/getListAll', {
+      method: 'post',
+      headers: {
+        Authorization: `bearer ${token}`,
+      }
+    }).then(res => res.json()).then(function (resp) {
+      if (resp.data) {
+        const { repository: { issues: { totalCount, edges }}} = resp.data;
+        self.graphList = [defaultPargh].concat(edges.map(({ cursor, node }) => {
+          node.value = `${node.number}-|-${cursor}`;
+          return node;
+        }));
+        return;
+      }
+      console.error('some error happend');
+    });
   },
   methods: {
     renderWeChat: function (source) {
@@ -91,9 +128,140 @@ let app = new Vue({
       }
       return output
     },
-    editorThemeChanged: function (editorTheme) {
-      this.editor.setOption('theme', editorTheme)
+    clipData(key, extendText = '') {
+      const item = this.selectedItem[key];
+      if (!item) {
+        return;
+      }
+      const text = document.createElement('textarea');
+      text.id = 'temp-span';
+      text.style.cssText = 'display: absolute; left: -1000px; z-index: -1;';
+      text.value = item + extendText;
+
+      document.body.appendChild(text);
+      text.select();
+
+      document.execCommand('Copy');
+
+      this.$message({
+        message: '已复制到剪贴板', type: 'success'
+      });
+
+      document.body.removeChild(text);
     },
+    copyLink() {
+      this.clipData('url');
+    },
+    copyTitle() {
+      this.clipData('title');
+    },
+    copymd() {
+      this.clipData('body', '\r\n![公众号：前端黑洞](https://doddle.oss-cn-beijing.aliyuncs.com/oldNotes/20200607230314.png)');
+    },
+    refreshContent() {
+      const params = this.selectedItem;
+      $('#loading').show();
+      fetch('https://closertb.site/arcticle/graphql', {
+        method: 'post',
+        headers: {
+          Authorization: `bearer ${token}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          operationName: 'BlogDetail',
+          query: `query BlogDetail($number: Int!, $cursor: String) {
+            repository(owner: "closertb", name: "closertb.github.io") {
+              issue(number: $number) {
+                title
+                url
+                body
+                updatedAt
+                comments(first:100) {
+                  totalCount
+                  nodes {
+                    createdAt
+                    bodyHTML
+                    author {
+                      login
+                      avatarUrl
+                    }
+                  }
+                }
+                reactions(first: 100) {
+                  totalCount
+                  nodes {
+                    content
+                  }
+                }
+              }
+              last: issues(last: 1, before: $cursor, orderBy: {
+                field: CREATED_AT
+                direction: DESC
+              }, filterBy: {
+                createdBy: 'closertb'
+              }) {
+                edges {
+                  cursor
+                  node {
+                    title
+                    url
+                  }
+                }
+              }
+              next: issues(first: 1, after: $cursor, orderBy: {
+                field: CREATED_AT
+                direction: DESC
+              }, filterBy: {
+                createdBy: 'closertb'
+              }) {
+                edges {
+                  cursor
+                  node {
+                    title
+                    url
+                  }
+                }
+              }
+            }
+          }`,
+          variables: params
+        })
+      }).then(res => res.json()).then((resp) => {
+        $('#loading').hide();
+        if (resp.data) {
+          const { repository: { issue: { body, title, url } } } = resp.data;
+          this.selectedItem = Object.assign(this.selectedItem, { title, url, body });
+          this.editor.setValue(body);
+          return;
+        }
+        console.error('some error happend');
+      }).catch(() => {
+        $('#loading').hide();
+      });
+    },
+    refreshList() {
+      this.loading = true;
+      fetch('https://closertb.site/arcticle/getListAll', {
+        method: 'post',
+        headers: {
+          Authorization: `bearer ${token}`,
+        }
+      }).then(res => res.json()).then((resp) => {
+        this.loading = false;
+        if (resp.data) {
+          const { repository: { issues: { totalCount, edges } } } = resp.data;
+          this.graphList = [defaultPargh].concat(edges.map(({ cursor, node }) => {
+            node.value = `${node.number}-|-${cursor}`;
+            return node;
+          }));
+          return;
+        }
+        console.error('some error happend');
+      });
+    },
+/*     editorThemeChanged: function (editorTheme) {
+      this.editor.setOption('theme', editorTheme)
+    }, */
     fontChanged: function (fonts) {
       this.wxRenderer.setOptions({
         fonts: fonts
@@ -106,13 +274,32 @@ let app = new Vue({
       });
       this.refresh()
     },
-    themeChanged: function (themeName) {
+    graphChanged: function (graph) {
+      const [number, cursor] = graph.split('-|-');
+      const params = {
+        number: +number,
+        cursor
+      };
+      this.wxRenderer.setOptions({
+        graph
+      });
+      if (!number) {
+        getDefault()
+        .then(data => {
+          this.editor.setValue(data);
+        });
+        return;
+      }
+      this.selectedItem = params;
+      this.refreshContent();
+    },
+/*     themeChanged: function (themeName) {
       let themeObject = this.styleThemes[themeName];
       this.wxRenderer.setOptions({
         theme: themeObject
       });
       this.refresh()
-    },
+    }, */
     // 刷新右侧预览
     refresh: function () {
       this.output = this.renderWeChat(this.editor.getValue(0))

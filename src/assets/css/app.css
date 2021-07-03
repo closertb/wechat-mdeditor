@@ -76,12 +76,45 @@ section {
   padding-bottom: 10px;
 }
 
+.main-body .el-col {
+  position: relative;
+}
+
+.md-copy-link {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  right: 5px;
+  width: 20px;
+  height: 20px;
+}
+
 .ctrl {
   flex-basis: 60px;
   flex-grow: 1;
   flex-shrink: 1;
   display: flex;
   align-items: center;
+}
+
+.ctrl .ml-10 {
+  margin-left: 15px;
+}
+
+.ctrl .refresh {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  top: 5px;
+}
+
+.ctrl .refresh.loading {
+  animation: loading 1s infinite linear;
+}
+
+@keyframes loading {
+  0% { transform:rotate(0deg); }
+  100% { transform:rotate(360deg);}
 }
 
 .preview-wrapper {
@@ -120,6 +153,9 @@ section {
   width: 100% !important;
 }
 
+  figcaption {
+    display: none;
+  }
 /*.preview ul, .preview ol {*/
 /*  padding-left: 40px !important;*/
 /*}*/
@@ -146,6 +182,7 @@ section {
 /* ele ui */
 .el-form-item {
   margin-bottom: 0 !important;
+  position: relative;
 }
 
 /*wechat code block*/
@@ -155,7 +192,7 @@ section {
 
 .code-snippet__fix {
   word-wrap: break-word !important;
-  ont-size: 14px;
+  font-size: 14px;
   margin: 10px 0;
   color: #333;
   position: relative;

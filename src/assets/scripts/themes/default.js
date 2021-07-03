@@ -23,15 +23,16 @@ let defaultTheme = {
       'text-align': 'center',
       'font-weight': 'bold',
       'display': 'table',
-      'margin': '4em auto 2em auto',
-      'padding': '0 1em',
-      'border-bottom': '1px solid rgb(248,57,41)'
+      'margin': '2em auto 2em auto',
+      'padding': '0 .5em',
+      'border-bottom': '2px solid rgb(248,57,41)'
     },
     h3: {
       'font-weight': 'bold',
       'font-size': '1.1em',
-      'margin': '2em 8px 0.75em 0',
+      'margin': '1em 8px 0.75em 0',
       'padding-bottom': '.1em',
+      'line-height': '1.2',
       // 'border-bottom': '1px solid #eaecef',
       'padding-left': '8px',
       'border-left': '4px solid rgb(248,57,41)'
